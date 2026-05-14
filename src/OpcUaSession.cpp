@@ -5,13 +5,86 @@
 #include <iostream>
 #include <sstream>
 
+namespace {
+
+UA_MessageSecurityMode parseSecurityMode(const std::string& mode) {
+    if (mode == "Sign") {
+        return UA_MESSAGESECURITYMODE_SIGN;
+    }
+    if (mode == "SignAndEncrypt") {
+        return UA_MESSAGESECURITYMODE_SIGNANDENCRYPT;
+    }
+    return UA_MESSAGESECURITYMODE_NONE;
+}
+
+} // namespace
+
 namespace opcua {
 
 OpcUaSession::OpcUaSession(ServerConfig config)
     : m_config(std::move(config)) {
     m_client = UA_Client_new();
-    UA_ClientConfig_setDefault(UA_Client_getConfig(m_client));
-    UA_Client_getConfig(m_client)->timeout = m_config.requestTimeoutMs;
+    UA_ClientConfig* clientConfig = UA_Client_getConfig(m_client);
+
+    const UA_MessageSecurityMode securityMode = parseSecurityMode(m_config.securityMode);
+    const bool needEncryption = securityMode != UA_MESSAGESECURITYMODE_NONE
+        || m_config.securityPolicyUri != "http://opcfoundation.org/UA/SecurityPolicy#None";
+
+    if (needEncryption) {
+        UA_ByteString certificate = UA_STRING_NULL;
+        UA_ByteString privateKey = UA_STRING_NULL;
+        UA_ByteString* trustList = nullptr;
+        std::size_t trustListSize = 0;
+
+        UA_StatusCode certStatus = UA_STATUSCODE_GOOD;
+        UA_StatusCode keyStatus = UA_STATUSCODE_GOOD;
+
+        if (!m_config.clientCertificatePath.empty()) {
+            certStatus = UA_ByteString_loadFile(m_config.clientCertificatePath.c_str(), &certificate);
+        }
+        if (!m_config.clientPrivateKeyPath.empty()) {
+            keyStatus = UA_ByteString_loadFile(m_config.clientPrivateKeyPath.c_str(), &privateKey);
+        }
+
+        std::vector<UA_ByteString> trustBuffers;
+        trustBuffers.reserve(m_config.trustListPaths.size());
+        for (const auto& trustPath : m_config.trustListPaths) {
+            UA_ByteString trust = UA_STRING_NULL;
+            if (UA_ByteString_loadFile(trustPath.c_str(), &trust) == UA_STATUSCODE_GOOD) {
+                trustBuffers.push_back(trust);
+            }
+        }
+
+        if (certStatus == UA_STATUSCODE_GOOD && keyStatus == UA_STATUSCODE_GOOD
+            && certificate.length > 0 && privateKey.length > 0) {
+            trustListSize = trustBuffers.size();
+            trustList = trustListSize > 0 ? trustBuffers.data() : nullptr;
+
+            UA_ClientConfig_setDefaultEncryption(
+                clientConfig,
+                certificate,
+                privateKey,
+                trustList,
+                trustListSize,
+                nullptr,
+                0);
+        } else {
+            UA_ClientConfig_setDefault(clientConfig);
+        }
+
+        UA_ByteString_clear(&certificate);
+        UA_ByteString_clear(&privateKey);
+        for (auto& trust : trustBuffers) {
+            UA_ByteString_clear(&trust);
+        }
+    } else {
+        UA_ClientConfig_setDefault(clientConfig);
+    }
+
+    clientConfig->timeout = m_config.requestTimeoutMs;
+    clientConfig->securityMode = securityMode;
+    UA_String_clear(&clientConfig->securityPolicyUri);
+    clientConfig->securityPolicyUri = UA_STRING_ALLOC(m_config.securityPolicyUri.c_str());
 }
 
 OpcUaSession::~OpcUaSession() {
@@ -189,7 +262,16 @@ void OpcUaSession::runLoop() {
 }
 
 bool OpcUaSession::connectInternal() {
-    UA_StatusCode status = UA_Client_connect(m_client, m_config.endpointUrl.c_str());
+    UA_StatusCode status = UA_STATUSCODE_BAD;
+    if (m_config.useUsernamePassword) {
+        status = UA_Client_connectUsername(
+            m_client,
+            m_config.endpointUrl.c_str(),
+            m_config.username.c_str(),
+            m_config.password.c_str());
+    } else {
+        status = UA_Client_connect(m_client, m_config.endpointUrl.c_str());
+    }
     return status == UA_STATUSCODE_GOOD;
 }
 

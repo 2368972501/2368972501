@@ -7,6 +7,8 @@
 - 批量写（`UA_Client_Service_write`）
 - 自动掉线重连（指数退避）
 - 单点故障隔离（某个 Server 掉线不影响其他会话）
+- 支持加密连接（安全模式 / 安全策略 / 证书）
+- 支持用户认证（Anonymous、Username/Password）
 
 ## 架构设计
 
@@ -49,7 +51,25 @@ cmake --build build -j
 ```
 
 默认示例连接：
-- `opc.tcp://127.0.0.1:4840`（line-a）
+- `opc.tcp://127.0.0.1:4840`（line-a，SignAndEncrypt + Basic256Sha256 + 用户名密码）
 - `opc.tcp://127.0.0.1:4850`（line-b）
 
 请按你的真实 Server 地址与节点配置修改 `src/main.cpp`。
+
+## 5. 安全连接与认证配置
+
+`ServerConfig` 新增以下字段：
+
+- `securityMode`：`None` / `Sign` / `SignAndEncrypt`
+- `securityPolicyUri`：如
+  - `http://opcfoundation.org/UA/SecurityPolicy#None`
+  - `http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256`
+- `clientCertificatePath`：客户端证书（DER）
+- `clientPrivateKeyPath`：客户端私钥（DER）
+- `trustListPaths`：服务端证书或 CA 证书列表
+- `useUsernamePassword`：是否使用用户名密码认证
+- `username` / `password`：用户名密码
+
+注意：
+- 当 `securityMode != None` 或 `securityPolicyUri != #None` 时，客户端将按加密模式初始化。
+- 若启用 `useUsernamePassword=true`，连接时会使用 `UA_Client_connectUsername`。
