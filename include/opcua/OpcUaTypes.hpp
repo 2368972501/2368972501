@@ -36,6 +36,24 @@ struct ServerConfig {
     std::uint32_t requestTimeoutMs {3000};
     std::uint32_t reconnectIntervalMs {1000};
     std::uint32_t maxReconnectIntervalMs {8000};
+
+    // 安全配置
+    // None / Sign / SignAndEncrypt
+    std::string securityMode {"None"};
+    // 例如: http://opcfoundation.org/UA/SecurityPolicy#None
+    std::string securityPolicyUri {
+        "http://opcfoundation.org/UA/SecurityPolicy#None"
+    };
+
+    // 证书文件路径（启用加密时需提供）
+    std::string clientCertificatePath;
+    std::string clientPrivateKeyPath;
+    std::vector<std::string> trustListPaths;
+
+    // 用户认证配置
+    bool useUsernamePassword {false};
+    std::string username;
+    std::string password;
 };
 
 } // namespace opcua

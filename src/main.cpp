@@ -15,6 +15,14 @@ int main() {
         .requestTimeoutMs = 3000,
         .reconnectIntervalMs = 1000,
         .maxReconnectIntervalMs = 8000,
+        .securityMode = "SignAndEncrypt",
+        .securityPolicyUri = "http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256",
+        .clientCertificatePath = "./certs/client_cert.der",
+        .clientPrivateKeyPath = "./certs/client_key.der",
+        .trustListPaths = {"./certs/server_cert.der"},
+        .useUsernamePassword = true,
+        .username = "operator",
+        .password = "operator_password",
     });
 
     manager.addServer({
@@ -23,6 +31,8 @@ int main() {
         .requestTimeoutMs = 3000,
         .reconnectIntervalMs = 1000,
         .maxReconnectIntervalMs = 8000,
+        .securityMode = "None",
+        .securityPolicyUri = "http://opcfoundation.org/UA/SecurityPolicy#None",
     });
 
     manager.startAll();
